@@ -265,31 +265,36 @@ def add_product(current_user):
 
     return render_template('add_product.html')
 
-# Route for deleting products
+
 @app.route('/delete_product/<int:product_id>', methods=['POST'])
 @token_required
 def delete_product(current_user, product_id):
+    """Delete the product from the database."""
     if not current_user.is_admin:
-        return redirect('/products')  # Redirect if not an admin
+        return redirect('/products')  # Redirect to product list if not an admin
 
     product = Product.query.get_or_404(product_id)
+
     db.session.delete(product)
-    db.session.commit()
-    flash('Product deleted successfully!', 'success')
-    return redirect('/owner_dashboard')  # Redirect to owner dashboard after deletion
+    db.session.commit()  # Commit the transaction to delete the product
+
+    flash('Product deleted successfully!', 'success')  # Flash success message
+    return redirect('/owner_dashboard')  # Redirect to the owner dashboard after deletion
+
 
 # Route for updating products
 @app.route('/update_product/<int:product_id>', methods=['GET', 'POST'])
 @token_required
-def update_product(product_id, current_user):
+def update_product(current_user, product_id):
     if not current_user.is_admin:
         return redirect('/products')  # Redirect if not an admin
 
-    product = Product.query.get_or_404(product_id)
+    product = Product.query.get_or_404(product_id)  # Get the product by ID
 
     if request.method == 'POST':
         product.name = request.form['name']
         product.price = float(request.form['price'])
+        product.quantity = float(request.form['quantity'])
         db.session.commit()
         flash('Product updated successfully!', 'success')
         return redirect('/owner_dashboard')

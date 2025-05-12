@@ -29,12 +29,15 @@
     </style>
 </head>
 <body>
-    <h1>Delete Product</h1>
-    <p>Are you sure you want to delete the product <strong>{{ product.name }}</strong>?</p>
-    <p>Price: ${{ product.price }}</p>
+    <h1>Product Deleted Successfully!</h1>
+    <p>The product <strong>{{ product.name }}</strong> has been deleted.</p>
+
+    <!-- Form to delete the product -->
     <form action="/delete_product/{{ product.id }}" method="POST">
-        <button type="submit" class="btn">Yes, Delete Product</button>
+        <button type="submit" class="btn">Delete Product</button>
     </form>
-    <a href="/owner_dashboard" class="btn">Cancel</a> <!-- Back to product list -->
+
+    <!-- Cancel button that redirects back to the owner dashboard -->
+    <a href="/owner_dashboard" class="btn">Back to Dashboard</a>
 </body>
 </html>

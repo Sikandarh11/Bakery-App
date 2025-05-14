@@ -24,6 +24,28 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 
+class Order(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    customer_name = db.Column(db.String(200), nullable=False)
+    customer_email = db.Column(db.String(200), nullable=False)
+    customer_phone = db.Column(db.String(20), nullable=False)
+    customer_address = db.Column(db.String(300), nullable=False)
+    total = db.Column(db.Float, nullable=False)
+    order_date = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    products = db.relationship('OrderProduct', backref='order', lazy=True)
+
+    def __repr__(self):
+        return f'<Order {self.id}>'
+
+class OrderProduct(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    product_name = db.Column(db.String(200), nullable=False)
+    product_price = db.Column(db.Float, nullable=False)
+    product_quantity = db.Column(db.Integer, nullable=False)
+
+    def __repr__(self):
+        return f'<OrderProduct {self.id}>'
 
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -142,7 +164,6 @@ def place_order():
     cart = session.get('cart', [])
     total = sum(item['price'] for item in cart)  # Access 'price' from the dictionary
     return render_template('place_order.html', cart=cart, total=total)
-
 @app.route('/confirm_order', methods=['POST'])
 def confirm_order():
     customer_name = request.form['customer_name']
@@ -150,9 +171,32 @@ def confirm_order():
     customer_phone = request.form['customer_phone']
     customer_address = request.form['customer_address']
 
-    # Get cart details from session (this is just an example, adjust to your setup)
+    # Get cart details from session
     cart = session.get('cart', [])
-    total = sum(item['price'] for item in cart)
+    total = sum(item['price'] * item['quantity'] for item in cart)
+
+    # Save the order to the database
+    new_order = Order(
+        customer_name=customer_name,
+        customer_email=customer_email,
+        customer_phone=customer_phone,
+        customer_address=customer_address,
+        total=total
+    )
+    db.session.add(new_order)
+    db.session.commit()  # Commit to save the order in the database
+
+    # Save order products to the database
+    for item in cart:
+        order_product = OrderProduct(
+            order_id=new_order.id,
+            product_name=item['name'],
+            product_price=item['price'],
+            product_quantity=item['quantity']
+        )
+        db.session.add(order_product)
+
+    db.session.commit()  # Commit to save the order products
 
     # Send confirmation email to admin
     send_order_email(customer_name, customer_email, customer_phone, customer_address, total)
@@ -213,8 +257,36 @@ def send_order_email(customer_name, customer_email, customer_phone, customer_add
     except Exception as e:
         flash(f"An error occurred while sending the email: {str(e)}", 'danger')
 
-# Route for Admin Info
-# Route for Admin Info
+@app.route('/view_customer_orders')
+@token_required
+def view_customer_orders(current_user):
+    if not current_user.is_admin:
+        return redirect('/products')  # Redirect if not an admin
+
+    # Fetch all orders from the database
+    orders = Order.query.all()
+
+    # Prepare the order data to display in the template
+    order_data = []
+    for order in orders:
+        order_products = OrderProduct.query.filter_by(order_id=order.id).all()
+        products = []
+        for product in order_products:
+            products.append({
+                'name': product.product_name,
+                'price': product.product_price,
+                'quantity': product.product_quantity
+            })
+        order_data.append({
+            'customer_name': order.customer_name,
+            'customer_email': order.customer_email,
+            'customer_phone': order.customer_phone,  # Added the phone number field
+            'total': order.total,
+            'products': products
+        })
+
+    return render_template('customer_orders.html', order_data=order_data)
+
 @app.route('/admin_info', methods=['GET', 'POST'])
 @token_required
 def admin_info(current_user):
@@ -265,22 +337,23 @@ def add_product(current_user):
 
     return render_template('add_product.html')
 
-
-@app.route('/delete_product/<int:product_id>', methods=['POST'])
+@app.route('/delete_product/<int:product_id>', methods=['DELETE'])
 @token_required
 def delete_product(current_user, product_id):
     """Delete the product from the database."""
     if not current_user.is_admin:
-        return redirect('/products')  # Redirect to product list if not an admin
+        return jsonify({'success': False, 'message': 'You are not authorized to delete this product.'}), 403
 
+    # Fetch the product by its ID
     product = Product.query.get_or_404(product_id)
 
-    db.session.delete(product)
-    db.session.commit()  # Commit the transaction to delete the product
-
-    flash('Product deleted successfully!', 'success')  # Flash success message
-    return redirect('/owner_dashboard')  # Redirect to the owner dashboard after deletion
-
+    try:
+        # Deleting the product from the database
+        db.session.delete(product)
+        db.session.commit()  # Commit the transaction
+        return jsonify({'success': True, 'message': f'Product "{product.name}" deleted successfully!'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f"An error occurred: {str(e)}"}), 500
 
 # Route for updating products
 @app.route('/update_product/<int:product_id>', methods=['GET', 'POST'])
@@ -331,8 +404,6 @@ def register():
         return redirect('/login')  # Redirect to login page after successful registration
 
     return render_template('register.html')
-
-# Route for user login
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

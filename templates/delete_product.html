@@ -29,15 +29,36 @@
     </style>
 </head>
 <body>
-    <h1>Product Deleted Successfully!</h1>
-    <p>The product <strong>{{ product.name }}</strong> has been deleted.</p>
+    <h1>Are you sure you want to delete the product?</h1>
+    <p>The product <strong>{{ product.name }}</strong> will be permanently deleted.</p>
 
-    <!-- Form to delete the product -->
-    <form action="/delete_product/{{ product.id }}" method="POST">
-        <button type="submit" class="btn">Delete Product</button>
-    </form>
+    <!-- Button to trigger deletion -->
+    <button class="btn" onclick="deleteProduct({{ product.id }})">Delete Product</button>
 
-    <!-- Cancel button that redirects back to the owner dashboard -->
+    <!-- Back to Dashboard -->
     <a href="/owner_dashboard" class="btn">Back to Dashboard</a>
+
+    <script>
+        // Function to handle product deletion via JavaScript
+        function deleteProduct(productId) {
+            fetch(`/product_delete/${productId}`, {
+                method: 'DELETE',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);  // Show success message
+                    window.location.href = "/owner_dashboard";  // Redirect back to the dashboard
+                } else {
+                    alert(data.message);  // Show error message
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting the product.');
+            });
+        }
+    </script>
+
 </body>
 </html>
